@@ -47,13 +47,15 @@ class CleanupTrackingDataJob < ApplicationJob
   end
 
   def delete_scope(scope, batch)
-    return scope.delete_all unless batch
+    with_statement_timeout_disabled(scope.connection) do
+      return scope.delete_all unless batch
 
-    total = 0
-    scope.in_batches(of: DEFAULT_BATCH_SIZE) do |relation|
-      total += relation.delete_all
+      total = 0
+      scope.in_batches(of: DEFAULT_BATCH_SIZE) do |relation|
+        total += relation.delete_all
+      end
+      total
     end
-    total
   end
 
   def cutoff_predicate(klass, columns)
@@ -82,5 +84,17 @@ class CleanupTrackingDataJob < ApplicationJob
 
       Rails.logger.info("[CleanupTrackingDataJob] Removed #{count} #{name} records older than #{cutoff}")
     end
+  end
+
+  def with_statement_timeout_disabled(connection, &block)
+    connection.transaction do
+      connection.execute("SET LOCAL statement_timeout = 0")
+      block.call
+    end
+  rescue ActiveRecord::StatementInvalid => e
+    raise unless e.cause.is_a?(PG::QueryCanceled)
+
+    Rails.logger.error("[CleanupTrackingDataJob] Statement timeout could not be disabled: #{e.message}")
+    raise
   end
 end
