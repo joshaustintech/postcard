@@ -7,8 +7,15 @@ class CleanupTrackingDataJob < ApplicationJob
   DEFAULT_BATCH_SIZE = 1_000
 
   TARGETS = [
-    { name: 'Ahoy::Event', columns: %i[time] },
-    { name: 'Ahoy::Visit', columns: %i[started_at], batch: true },
+    { name: 'Ahoy::Event', columns: %i[time], batch: true },
+    {
+      name: 'Ahoy::Visit',
+      columns: %i[started_at],
+      batch: true,
+      dependents: [
+        { name: 'Ahoy::Event', foreign_key: :visit_id }
+      ]
+    },
     { name: 'Ahoy::Click', columns: %i[updated_at created_at] },
     { name: 'EmailMessage', columns: %i[sent_at], batch: true },
     { name: 'SolidCache::Entry', columns: %i[updated_at created_at], batch: true },
@@ -39,20 +46,20 @@ class CleanupTrackingDataJob < ApplicationJob
     end
 
     scope = klass.where(predicate, cutoff: cutoff)
-    delete_scope(scope, target.fetch(:batch, false))
+    delete_scope(scope, target.fetch(:batch, false), target[:dependents])
   end
 
   def constantize(value)
     value.is_a?(String) ? value.safe_constantize : value
   end
 
-  def delete_scope(scope, batch)
+  def delete_scope(scope, batch, dependents = nil)
     with_statement_timeout_disabled(scope.connection) do
-      return scope.delete_all unless batch
+      return delete_relation(scope, dependents) unless batch
 
       total = 0
       scope.in_batches(of: DEFAULT_BATCH_SIZE) do |relation|
-        total += relation.delete_all
+        total += delete_relation(relation, dependents)
       end
       total
     end
@@ -84,6 +91,20 @@ class CleanupTrackingDataJob < ApplicationJob
 
       Rails.logger.info("[CleanupTrackingDataJob] Removed #{count} #{name} records older than #{cutoff}")
     end
+  end
+
+  def delete_relation(relation, dependents)
+    ids = Array(relation.pluck(:id)) if dependents
+
+    Array(dependents).each do |dependent|
+      dependent_class = constantize(dependent[:name])
+      next unless dependent_class
+
+      fk = dependent.fetch(:foreign_key, :id)
+      dependent_class.where(fk => ids).delete_all
+    end
+
+    ids ? relation.where(id: ids).delete_all : relation.delete_all
   end
 
   def with_statement_timeout_disabled(connection, &block)
