@@ -15,6 +15,9 @@ default: &default
         telemetry:
           class: TelemetryJob
           schedule: every 1 hour
+        cleanup_tracking_data:
+          class: CleanupTrackingDataJob
+          schedule: "0 3 * * * America/New_York"
   workers:
     - queues: "*"
       threads: 1

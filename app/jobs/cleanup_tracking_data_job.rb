@@ -1,0 +1,86 @@
+# frozen_string_literal: true
+
+class CleanupTrackingDataJob < ApplicationJob
+  queue_as :low
+
+  RETENTION_PERIOD = 2.weeks
+  DEFAULT_BATCH_SIZE = 1_000
+
+  TARGETS = [
+    { name: 'Ahoy::Event', columns: %i[time] },
+    { name: 'Ahoy::Visit', columns: %i[started_at], batch: true },
+    { name: 'Ahoy::Click', columns: %i[updated_at created_at] },
+    { name: 'EmailMessage', columns: %i[sent_at], batch: true },
+    { name: 'SolidCache::Entry', columns: %i[updated_at created_at], batch: true },
+    { name: 'SolidQueue::Job', columns: %i[updated_at finished_at created_at scheduled_at], batch: true },
+    { name: 'SolidQueue::Process', columns: %i[last_heartbeat_at created_at] },
+    { name: 'SolidQueue::Semaphore', columns: %i[expires_at updated_at created_at] }
+  ].freeze
+
+  def perform(retention_period: RETENTION_PERIOD)
+    cutoff = retention_period.ago
+    results = TARGETS.index_with { |target| cleanup_target(target, cutoff) }
+    log_results(results, cutoff)
+  end
+
+  private
+
+  def cleanup_target(target, cutoff)
+    klass = constantize(target[:name])
+    unless klass
+      Rails.logger.warn("[CleanupTrackingDataJob] Unable to find #{target[:name]}, skipping cleanup")
+      return 0
+    end
+
+    predicate = cutoff_predicate(klass, target.fetch(:columns))
+    unless predicate
+      Rails.logger.warn("[CleanupTrackingDataJob] No timestamp columns configured for #{klass.name}, skipping cleanup")
+      return 0
+    end
+
+    scope = klass.where(predicate, cutoff: cutoff)
+    delete_scope(scope, target.fetch(:batch, false))
+  end
+
+  def constantize(value)
+    value.is_a?(String) ? value.safe_constantize : value
+  end
+
+  def delete_scope(scope, batch)
+    return scope.delete_all unless batch
+
+    total = 0
+    scope.in_batches(of: DEFAULT_BATCH_SIZE) do |relation|
+      total += relation.delete_all
+    end
+    total
+  end
+
+  def cutoff_predicate(klass, columns)
+    connection = klass.connection
+    available_columns = columns.map(&:to_s) & klass.column_names
+    return if available_columns.empty?
+
+    table = klass.quoted_table_name
+    fallback = connection.quote(Time.at(0).utc)
+
+    expressions = available_columns.map do |column|
+      quoted_column = connection.quote_column_name(column)
+      "COALESCE(#{table}.#{quoted_column}, #{fallback})"
+    end
+
+    if expressions.length == 1
+      "#{expressions.first} < :cutoff"
+    else
+      "GREATEST(#{expressions.join(', ')}) < :cutoff"
+    end
+  end
+
+  def log_results(results, cutoff)
+    results.each do |name, count|
+      next unless count.positive?
+
+      Rails.logger.info("[CleanupTrackingDataJob] Removed #{count} #{name} records older than #{cutoff}")
+    end
+  end
+end
