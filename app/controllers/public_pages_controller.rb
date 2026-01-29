@@ -32,6 +32,13 @@ class PublicPagesController < ApplicationController
     @posts = @account.posts.published.publicly_indexable
   end
 
+  def llms_txt
+    return e404 if @account.blank?
+
+    @posts = @account.posts.published.publicly_listed
+    render plain: generate_llms_txt, content_type: 'text/plain'
+  end
+
   def og_image
     png = Rails.cache.fetch("account-#{@account.id}-#{@account.updated_at.to_i}-og-img-v7") do
       generate_og_image
@@ -63,5 +70,28 @@ class PublicPagesController < ApplicationController
 
     redirect_to "http://#{Rails.configuration.base_host}:3000#{request.path}",
                 allow_other_host: true
+  end
+
+  def generate_llms_txt
+    description_text = @account.description.present? ? @account.description.to_plain_text : ''
+
+    lines = [
+      "# #{@account.name}",
+      '',
+      "> #{description_text}".strip,
+      '',
+      "Homepage: #{@account.url}",
+      ''
+    ]
+
+    if @posts.any?
+      lines << '## Posts'
+      lines << ''
+      @posts.each do |post|
+        lines << "- [#{post.subject}](#{post.url}.md)"
+      end
+    end
+
+    lines.join("\n")
   end
 end

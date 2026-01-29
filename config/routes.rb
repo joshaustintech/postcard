@@ -82,6 +82,7 @@ Rails.application.routes.draw do
   resources :public_posts, path: 'posts', param: :slug
   get '/posts/:slug/og/:updated_at', to: 'public_posts#og_image', as: :public_post_og_image
   get 'sitemap.xml', to: 'public_pages#sitemap', format: 'xml', as: :public_page_sitemap
+  get 'llms.txt', to: 'public_pages#llms_txt', as: :llms_txt
 
   #
   # CDN
