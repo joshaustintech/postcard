@@ -176,7 +176,7 @@ class Account < ApplicationRecord
     return if subscription.blank?
 
     subscription.destroy!
-    Rails.logger.info "Unsubscribed #{email} from updates.postcard.page"
+    Rails.logger.info "Unsubscribed #{email} from updates"
   end
 
   def generate_icon
