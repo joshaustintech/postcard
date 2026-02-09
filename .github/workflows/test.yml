@@ -51,6 +51,8 @@ jobs:
           bundle exec rails db:migrate
           yarn --frozen-lockfile
           bundle exec rake assets:precompile
+      - name: Check Zeitwerk autoloading
+        run: bundle exec rails zeitwerk:check
       - name: Run unit tests (SOLO)
         run: bundle exec rails test:all
       - name: Run unit tests (MULTIUSER)
