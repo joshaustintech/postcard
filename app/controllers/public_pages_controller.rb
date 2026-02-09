@@ -27,13 +27,13 @@ class PublicPagesController < ApplicationController
   end
 
   def sitemap
-    return e404 if @account.blank?
+    return head :not_found if @account.blank?
 
     @posts = @account.posts.published.publicly_indexable
   end
 
   def llms_txt
-    return e404 if @account.blank?
+    return head :not_found if @account.blank?
 
     @posts = @account.posts.published.publicly_listed
     render plain: generate_llms_txt, content_type: 'text/plain'
@@ -73,12 +73,16 @@ class PublicPagesController < ApplicationController
   end
 
   def generate_llms_txt
-    description_text = @account.description.present? ? @account.description.to_plain_text : ''
+    description_text = if @account.description.present?
+                         ReverseMarkdown.convert(@account.description.to_s)
+                       else
+                         ''
+                       end
 
     lines = [
       "# #{@account.name}",
       '',
-      "> #{description_text}".strip,
+      "#{description_text}".strip,
       '',
       "Homepage: #{@account.url}",
       ''

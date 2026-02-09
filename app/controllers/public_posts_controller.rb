@@ -67,7 +67,9 @@ class PublicPostsController < ApplicationController
     <<~MD
       # #{post.subject}
 
-      Published: #{post.published_at.strftime('%Y-%m-%d')}
+      *Permalink: #{post.url}*
+
+      *Published: #{post.published_at.strftime('%Y-%m-%d')}*
 
       #{body_markdown}
     MD
