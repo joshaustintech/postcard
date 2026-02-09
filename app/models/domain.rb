@@ -77,6 +77,10 @@ class Domain < ApplicationRecord
       return
     end
 
+    # Trigger DNS verification check with Render
+    Domain.render_service_request("/#{domain}/verify", Net::HTTP::Post)
+
+    # Then retrieve the updated status
     response = Domain.render_service_request("/#{domain}", Net::HTTP::Get)
 
     unless response.code == '200'
