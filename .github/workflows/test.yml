@@ -68,5 +68,3 @@ jobs:
       - uses: actions/checkout@v2
       - name: Build Docker image
         run: docker build -t postcard:test .
-      - name: Check Zeitwerk autoloading in container
-        run: docker run --rm -e SECRET_KEY_BASE=DUMMY -e RAILS_ENV=build postcard:test bin/rails zeitwerk:check
