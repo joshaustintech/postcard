@@ -6,7 +6,7 @@ class CheckoutController < ApplicationController
   before_action :redirect_in_solo
 
   def show
-    url = @account.checkout_url(page_setup_url(@account, :domain), page_url(@account))
+    url = @account.checkout_url(page_url(@account), page_url(@account))
     redirect_to url, status: :found, allow_other_host: true
   end
 
