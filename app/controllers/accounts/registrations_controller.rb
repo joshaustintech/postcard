@@ -35,8 +35,11 @@ module Accounts
     end
 
     def after_sign_up_path_for(account)
-      # page_setup_index_path(account)
-      page_path(account)
+      if Rails.configuration.multiuser_mode
+        page_checkout_path(account)
+      else
+        page_path(account)
+      end
     end
 
     def update_resource(resource, params)

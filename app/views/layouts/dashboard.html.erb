@@ -42,7 +42,7 @@ secondaryMenuItems = [
     name: "Billing",
     newTab: false,
     to: page_billing_path(@account),
-    show: @account&.active_subscription? && Rails.configuration.multiuser_mode
+    show: @account&.payment_processor&.subscribed? && Rails.configuration.multiuser_mode
   },
   {
     name: "Queue",
